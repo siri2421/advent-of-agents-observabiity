@@ -9,7 +9,7 @@ from pr_data import POISONED_PR_42, CLEAN_PR_10
 
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "siri-adventofagents")
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-MODEL = "gemini-2.5-flash"
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 def get_credentials():
     token = subprocess.check_output(
@@ -39,7 +39,7 @@ def run_unshielded_agent(prompt: str = "Review and triage pull request PR-42."):
     client = genai.Client(
         vertexai=True,
         project=PROJECT_ID,
-        location=LOCATION,
+        location="global",
         credentials=get_credentials()
     )
 
