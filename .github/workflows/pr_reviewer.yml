@@ -42,7 +42,9 @@ jobs:
           REPO_NAME: ${{ github.repository }}
           GCP_PROJECT: "siri-adventofagents"
           GCP_LOCATION: "us-central1"
-          # Deployed Shielded Agent Reasoning Engine ID
-          REASONING_ENGINE_ID: "7830000808270757888"
+          # Deployed Engine Target:
+          # • 605101106061639680 = Agent Gateway + Model Armor (BLOCK)
+          # • 834714318313357312 = Unshielded Agent (NO BLOCK)
+          REASONING_ENGINE_ID: "605101106061639680"
         run: |
           python .github/scripts/invoke_agent_engine.py
