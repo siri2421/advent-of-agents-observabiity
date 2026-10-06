@@ -3,7 +3,7 @@
 **Episode Title**: Prompt Shielding: Block Injections with Model Armor  
 **Track**: Phase 3: Runtime Guardrails & Data Protection (Layer 2: Prevention)  
 **Presenter**: Sirisha Karra  
-**Model**: `gemini-3.1-pro-preview` (Google DeepMind Gemini 3.1 series)  
+**Model**: `gemini-3.6-flash` (Latest Gemini Enterprise series on global endpoint)  
 **Target Duration**: 5 – 7 minutes (within 3 – 20 min range)  
 **Video Setting**: YouTube "Public Unlisted" (accessible to anyone with link)  
 **Target Project**: `siri-adventofagents` (us-central1)  
@@ -14,7 +14,7 @@
 - [x] **The Golden Rule (Always Kata)**: Copy-pasteable from repo root; runs locally in **< 30 seconds** (`python3 run_demo.py --mode compare`).
 - [x] **Technical Density (DevRel Style)**: Pure mechanics — explaining token context unification, indirect injection vectors, and out-of-band Model Armor perimeter inspection. Zero marketing fluff.
 - [x] **"No Slop" Guarantee**: 100% human presenter (Sirisha), verified working code snippets (`python3 -m py_compile`), and real live GCP/GitHub visuals.
-- [x] **Latest Gemini 3.1 Series**: Configured with `gemini-3.1-pro-preview`.
+- [x] **Latest Gemini Model Series**: Configured with `gemini-3.6-flash` on global endpoint.
 - [x] **Google Next Queue Priority**: Clean code and working CI/CD bot ready for immediate queue approval.
 
 ---

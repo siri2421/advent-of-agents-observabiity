@@ -8,7 +8,7 @@ from google.genai import types
 from pr_data import POISONED_PR_42, CLEAN_PR_10
 
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "siri-adventofagents")
-MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-pro-preview")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 def get_credentials():
     token = subprocess.check_output(

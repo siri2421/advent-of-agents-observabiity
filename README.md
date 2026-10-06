@@ -59,7 +59,7 @@ Language models process instructions and data within the exact same token contex
 
 ## 🤖 Model Target & Environment
 
-- **Primary Model**: `gemini-3.1-pro-preview` (Flagship Google DeepMind Gemini 3.1 series)
+- **Primary Model**: `gemini-3.6-flash` (Gemini Enterprise Agent Runtime)
 - **Deployment Platform**: Vertex AI Reasoning Engines / Gemini Enterprise Agent Runtime
 - **Location**: `us-central1` (Vertex AI) & `global` (Gemini API endpoint)
 
