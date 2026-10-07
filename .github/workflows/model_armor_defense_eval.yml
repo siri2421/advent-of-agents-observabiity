@@ -1,0 +1,96 @@
+name: Model Armor Defense Verification
+
+'on':
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Agent to evaluate (both, unshielded, or shielded)'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - unshielded
+          - shielded
+      pr_number:
+        description: 'PR number to test'
+        required: false
+        default: '3'
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  unshielded_agent:
+    name: "Agent 1: Unshielded (Privilege Escalation Vulnerable)"
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'shielded-only')) ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.test_mode == 'both' || github.event.inputs.test_mode == 'unshielded'))
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud via Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/508782573230/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-pr-bot@siri-adventofagents.iam.gserviceaccount.com'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-auth requests "google-adk==2.2.0" "google-cloud-aiplatform[reasoningengine,adk]>=1.75.0"
+
+      - name: Run Unshielded Defense Test
+        env:
+          GOOGLE_CLOUD_PROJECT: "siri-adventofagents"
+          GOOGLE_CLOUD_LOCATION: "us-central1"
+        run: |
+          PR_NUM="${{ github.event.pull_request.number || github.event.inputs.pr_number || '3' }}"
+          python day10/verify_agent_defense.py --local --mode unshielded --pr "$PR_NUM"
+
+  shielded_agent:
+    name: "Agent 2: Shielded (Model Armor Perimeter Active)"
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'unshielded-only')) ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.test_mode == 'both' || github.event.inputs.test_mode == 'shielded'))
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud via Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/508782573230/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-pr-bot@siri-adventofagents.iam.gserviceaccount.com'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-auth requests "google-adk==2.2.0" "google-cloud-aiplatform[reasoningengine,adk]>=1.75.0"
+
+      - name: Run Shielded Model Armor Defense Test
+        env:
+          GOOGLE_CLOUD_PROJECT: "siri-adventofagents"
+          GOOGLE_CLOUD_LOCATION: "us-central1"
+        run: |
+          PR_NUM="${{ github.event.pull_request.number || github.event.inputs.pr_number || '3' }}"
+          python day10/verify_agent_defense.py --local --mode shielded --pr "$PR_NUM"
