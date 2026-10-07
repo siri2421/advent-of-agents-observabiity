@@ -9,7 +9,16 @@ import google.auth
 from google.auth.transport.requests import Request
 
 def get_gcp_access_token():
-    """Acquires GCP OAuth access token via Workload Identity Federation / ADC."""
+    """Acquires GCP OAuth access token via gcloud CLI, environment, or ADC."""
+    if os.environ.get("GCP_ACCESS_TOKEN"):
+        return os.environ.get("GCP_ACCESS_TOKEN").strip()
+    try:
+        import subprocess
+        token = subprocess.check_output(["gcloud", "auth", "print-access-token"]).decode().strip()
+        if token:
+            return token
+    except Exception:
+        pass
     credentials, _ = google.auth.default(
         scopes=["https://www.googleapis.com/auth/cloud-platform"]
     )
