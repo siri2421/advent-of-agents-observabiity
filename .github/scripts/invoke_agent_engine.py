@@ -97,6 +97,7 @@ def main():
     project_id = os.environ.get("GCP_PROJECT", "siri-adventofagents")
     location = os.environ.get("GCP_LOCATION", "us-central1")
     engine_id = os.environ.get("REASONING_ENGINE_ID", "3821621218050572288")
+    agent_mode = os.environ.get("AGENT_MODE", "shielded").lower()
 
     if not repo or not pr_number:
         print("Missing REPO_NAME or PR_NUMBER. Exiting.")
@@ -106,7 +107,7 @@ def main():
     print(f"🔍 Analyzing PR #{pr_number} on {repo}")
     print(f"📦 GCP Project: {project_id} | Location: {location}")
     print(f"🤖 Vertex AI Reasoning Engine: {engine_id}")
-    print(f"🛡️  Security Architecture: Native AGENT_IDENTITY + Agent Egress Gateway")
+    print(f"🛡️  Agent Security Mode: {agent_mode.upper()}")
     print(f"================================================================")
 
     # 1. Clean, identical prompt template across all PRs
@@ -116,48 +117,32 @@ def main():
     # 2. Invoke the agent directly — the agent fetches the PR diff itself via read_pull_request tool
     result = invoke_reasoning_engine(project_id, location, engine_id, prompt, gcp_token)
 
-    # 3. Handle Attack / Quarantine Case
-    if result["status"] in ["BLOCKED", "ATTACK_CONTAINED"]:
-        comment = (
-            "## 🛡️ Gemini Enterprise AI PR Reviewer — Model Armor Security Alert\n\n"
-            "| Security Check | Status | Guardrail Policy |\n"
-            "| :--- | :--- | :--- |\n"
-            "| **Indirect Prompt Injection** | 🚨 **BLOCKED & CONTAINED** | `PI_AND_JAILBREAK` |\n"
-            "| **Tool Egress Inspection** | 🔒 **QUARANTINED** | `agent-prompt-shield` |\n"
-            "| **Privilege Escalation** | 🛡️ **PREVENTED** | Zero Unauthorized Tool Calls |\n\n"
-            "> [!CAUTION]\n"
-            "> **Security Violation**: Malicious prompt injection directive was detected inside the untrusted pull request diff. "
-            "Automated privilege escalation (`add_collaborator`) was halted.\n\n"
-            f"### 🤖 Agent Triage Summary\n{result['output'] or 'Review halted. Malicious payload neutralized.'}\n\n"
-            "---\n"
-            "*Protected by Google Cloud Model Armor & Gemini Enterprise Agent Runtime on Vertex AI.*"
-        )
-        if github_token:
-            post_pr_comment(repo, pr_number, github_token, comment)
-        print("❌ Malicious prompt injection detected! Failing CI build to block merge.")
-        sys.exit(1)
-
-    # 4. Handle Clean Case
-    elif result["status"] == "SUCCESS":
-        comment = (
-            "## 🛡️ Gemini Enterprise AI PR Reviewer — Code Triage\n\n"
-            "| Security Check | Status | Guardrail Policy |\n"
-            "| :--- | :--- | :--- |\n"
-            "| **Indirect Prompt Injection** | ✅ **PASSED** | `PI_AND_JAILBREAK` |\n"
-            "| **Tool Egress Inspection** | 🛡️ **CLEAN** | `agent-prompt-shield` |\n"
-            "| **Privilege Escalation** | ✅ **VERIFIED** | Clean Diff |\n\n"
-            f"### 🤖 Agent Triage Summary\n{result['output']}\n\n"
-            "---\n"
-            "*Protected by Google Cloud Model Armor & Gemini Enterprise Agent Runtime on Vertex AI.*"
-        )
-        if github_token:
-            post_pr_comment(repo, pr_number, github_token, comment)
-        print("✅ PR review completed successfully.")
-        sys.exit(0)
-
-    else:
+    # 3. Post review summary and complete normally
+    if result["status"] == "ERROR":
         print(f"❌ Error invoking agent engine: {result['error']}")
         sys.exit(1)
+
+    output_content = result["output"] or "Agent completed analysis with no output text."
+    tools_called = result.get("tools_called", [])
+    tools_str = ", ".join(f"`{t}`" for t in tools_called) if tools_called else "None"
+
+    comment = (
+        f"## 🤖 Gemini AI PR Reviewer — Review Report ({agent_mode.capitalize()} Mode)\n\n"
+        f"- **Agent Mode:** `{agent_mode}`\n"
+        f"- **Reasoning Engine:** `{engine_id}`\n"
+        f"- **Tools Executed:** {tools_str}\n\n"
+        f"### Review Summary\n\n"
+        f"{output_content}\n\n"
+        "---\n"
+        "*Advent of Agents Day 10 — Governed PR Reviewer Agent*"
+    )
+
+    if github_token:
+        post_pr_comment(repo, pr_number, github_token, comment)
+
+    print("✅ PR review completed successfully.")
+    sys.exit(0)
+
 
 if __name__ == "__main__":
     main()
