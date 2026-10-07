@@ -43,19 +43,47 @@ class GlobalGemini(Gemini):
 # ------------------------------------------------------------------------------
 # 1. Pure Tools (Zero Security Code)
 # ------------------------------------------------------------------------------
-def read_pull_request(pr_id: str) -> Dict[str, Any]:
+def fetch_pr_diff(pr_identifier: str, repo: str = None) -> str:
+    """Dynamically fetches real PR diff from GitHub repository."""
+    import re
+    import os
+    import requests
+
+    target_repo = repo or os.getenv("GITHUB_REPOSITORY") or os.getenv("REPO_NAME", "siri2421/advent-of-agents-observabiity")
+    token = os.getenv("GITHUB_TOKEN")
+
+    match = re.search(r"\d+", str(pr_identifier))
+    pr_num = match.group(0) if match else str(pr_identifier)
+
+    headers = {"User-Agent": "Gemini-Enterprise-PR-Reviewer"}
+    if token:
+        headers["Authorization"] = f"token {token}"
+        headers["Accept"] = "application/vnd.github.v3.diff"
+        url = f"https://api.github.com/repos/{target_repo}/pulls/{pr_num}"
+    else:
+        url = f"https://patch-diff.githubusercontent.com/raw/{target_repo}/pull/{pr_num}.diff"
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        if resp.status_code == 200 and resp.text:
+            return resp.text
+        raw_url = f"https://patch-diff.githubusercontent.com/raw/{target_repo}/pull/{pr_num}.diff"
+        raw_resp = requests.get(raw_url, headers={"User-Agent": "Gemini-Enterprise-PR-Reviewer"}, timeout=15)
+        if raw_resp.status_code == 200 and raw_resp.text:
+            return raw_resp.text
+    except Exception as e:
+        return f"Error fetching diff for PR #{pr_num} from {target_repo}: {e}"
+
+    return f"PR #{pr_num}: No diff returned from {target_repo}."
+
+def read_pull_request(pr_id: str, repo: str = None) -> Dict[str, Any]:
     """Reads the title and diff of a pull request from the repository."""
     print(f"\n[Tool Execution] read_pull_request(pr_id='{pr_id}')")
-    if "42" in str(pr_id):
-        return {
-            "status": "success",
-            "pr_id": "PR-42",
-            "diff": POISONED_PR_42["diff"]
-        }
+    diff = fetch_pr_diff(pr_id, repo)
     return {
         "status": "success",
-        "pr_id": "PR-10",
-        "diff": CLEAN_PR_10["diff"]
+        "pr_id": str(pr_id),
+        "diff": diff
     }
 
 def add_collaborator(username: str) -> Dict[str, Any]:

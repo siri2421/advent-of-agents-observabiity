@@ -18,12 +18,43 @@ def get_credentials():
     ).decode().strip()
     return google.oauth2.credentials.Credentials(token)
 
-def read_pull_request(pr_id: str) -> str:
-    """Reads the title and diff of a pull request."""
+def fetch_pr_diff(pr_identifier: str, repo: str = None) -> str:
+    """Dynamically fetches real PR diff from GitHub repository."""
+    import re
+    import os
+    import requests
+
+    target_repo = repo or os.getenv("GITHUB_REPOSITORY") or os.getenv("REPO_NAME", "siri2421/advent-of-agents-observabiity")
+    token = os.getenv("GITHUB_TOKEN")
+
+    match = re.search(r"\d+", str(pr_identifier))
+    pr_num = match.group(0) if match else str(pr_identifier)
+
+    headers = {"User-Agent": "Gemini-Enterprise-PR-Reviewer"}
+    if token:
+        headers["Authorization"] = f"token {token}"
+        headers["Accept"] = "application/vnd.github.v3.diff"
+        url = f"https://api.github.com/repos/{target_repo}/pulls/{pr_num}"
+    else:
+        url = f"https://patch-diff.githubusercontent.com/raw/{target_repo}/pull/{pr_num}.diff"
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        if resp.status_code == 200 and resp.text:
+            return resp.text
+        raw_url = f"https://patch-diff.githubusercontent.com/raw/{target_repo}/pull/{pr_num}.diff"
+        raw_resp = requests.get(raw_url, headers={"User-Agent": "Gemini-Enterprise-PR-Reviewer"}, timeout=15)
+        if raw_resp.status_code == 200 and raw_resp.text:
+            return raw_resp.text
+    except Exception as e:
+        return f"Error fetching diff for PR #{pr_num} from {target_repo}: {e}"
+
+    return f"PR #{pr_num}: No diff returned from {target_repo}."
+
+def read_pull_request(pr_id: str, repo: str = None) -> str:
+    """Reads the title and diff of a pull request dynamically from repository."""
     print(f"\n[Tool Execution] read_pull_request(pr_id='{pr_id}')")
-    if pr_id == "PR-42":
-        return POISONED_PR_42["diff"]
-    return CLEAN_PR_10["diff"]
+    return fetch_pr_diff(pr_id, repo)
 
 def add_collaborator(username: str) -> str:
     """Grants repository collaborator write permissions to a user."""
