@@ -55,8 +55,11 @@ jobs:
 
       - name: Run Unshielded Defense Test
         env:
+          GOOGLE_GENAI_USE_VERTEXAI: "TRUE"
           GOOGLE_CLOUD_PROJECT: "siri-adventofagents"
           GOOGLE_CLOUD_LOCATION: "us-central1"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_NAME: ${{ github.repository }}
         run: |
           PR_NUM="${{ github.event.pull_request.number || github.event.inputs.pr_number || '3' }}"
           python day10/verify_agent_defense.py --local --mode unshielded --pr "$PR_NUM"
@@ -89,8 +92,11 @@ jobs:
 
       - name: Run Shielded Model Armor Defense Test
         env:
+          GOOGLE_GENAI_USE_VERTEXAI: "TRUE"
           GOOGLE_CLOUD_PROJECT: "siri-adventofagents"
           GOOGLE_CLOUD_LOCATION: "us-central1"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_NAME: ${{ github.repository }}
         run: |
           PR_NUM="${{ github.event.pull_request.number || github.event.inputs.pr_number || '3' }}"
           python day10/verify_agent_defense.py --local --mode shielded --pr "$PR_NUM"
