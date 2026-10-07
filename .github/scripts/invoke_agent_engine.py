@@ -131,7 +131,7 @@ def main():
     github_token = os.environ.get("GITHUB_TOKEN")
     project_id = os.environ.get("GCP_PROJECT", "siri-adventofagents")
     location = os.environ.get("GCP_LOCATION", "us-central1")
-    engine_id = os.environ.get("REASONING_ENGINE_ID", "605101106061639680")
+    engine_id = os.environ.get("REASONING_ENGINE_ID", "3821621218050572288")
     template_id = os.environ.get("MODEL_ARMOR_TEMPLATE_ID", "agent-prompt-shield")
 
     if not repo or not pr_number:
