@@ -117,7 +117,7 @@ def main():
     # 2. Invoke the agent directly — the agent fetches the PR diff itself via read_pull_request tool
     result = invoke_reasoning_engine(project_id, location, engine_id, prompt, gcp_token)
 
-    # 3. Post review summary and complete normally
+    # 3. Post review report and evaluate agent verdict
     if result["status"] == "ERROR":
         print(f"❌ Error invoking agent engine: {result['error']}")
         sys.exit(1)
@@ -126,12 +126,32 @@ def main():
     tools_called = result.get("tools_called", [])
     tools_str = ", ".join(f"`{t}`" for t in tools_called) if tools_called else "None"
 
+    # Evaluate verdict directly from agent's findings and telemetry
+    output_lower = output_content.lower()
+    is_blocked = (
+        result.get("status") in ["BLOCKED", "ATTACK_CONTAINED"] or
+        any(phrase in output_lower for phrase in [
+            "prompt injection",
+            "model armor",
+            "quarantined",
+            "rejected",
+            "security concern",
+            "security violation",
+            "do not merge",
+            "unauthorized",
+            "malicious",
+            "attack",
+        ]) or
+        "add_collaborator" in tools_called
+    )
+
+    status_icon = "🚨 REJECTED" if is_blocked else "✅ APPROVED"
     comment = (
-        f"## 🤖 Gemini AI PR Reviewer — Review Report ({agent_mode.capitalize()} Mode)\n\n"
+        f"## 🤖 Gemini AI PR Reviewer — {status_icon} ({agent_mode.capitalize()} Mode)\n\n"
         f"- **Agent Mode:** `{agent_mode}`\n"
         f"- **Reasoning Engine:** `{engine_id}`\n"
         f"- **Tools Executed:** {tools_str}\n\n"
-        f"### Review Summary\n\n"
+        f"### Agent Evaluation Report\n\n"
         f"{output_content}\n\n"
         "---\n"
         "*Advent of Agents Day 10 — Governed PR Reviewer Agent*"
@@ -140,8 +160,26 @@ def main():
     if github_token:
         post_pr_comment(repo, pr_number, github_token, comment)
 
-    print("✅ PR review completed successfully.")
-    sys.exit(0)
+    if is_blocked:
+        # Extract the specific reason directly from the agent's response
+        reasons = [
+            line.strip() for line in output_content.split("\n")
+            if any(term in line.lower() for term in ["injection", "model armor", "reject", "unauthorized", "security", "quarantined", "concern", "attack"])
+        ]
+        agent_reason = "\n   • ".join(reasons) if reasons else output_content
+        print("\n" + "=" * 64)
+        print("❌ PR REVIEW GATE FAILED: Rejected by Reviewer Agent")
+        print("=" * 64)
+        print(f"👉 Reason from Agent:\n   • {agent_reason}\n")
+        print("❌ Failing workflow check to block untrusted PR from merging.")
+        sys.exit(1)
+    else:
+        print("\n" + "=" * 64)
+        print("✅ PR REVIEW GATE PASSED: Approved by Reviewer Agent")
+        print("=" * 64)
+        print(f"👉 Agent Summary:\n   • {output_content}\n")
+        print("✅ PR approved for merge.")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
