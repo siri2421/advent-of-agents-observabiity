@@ -126,30 +126,33 @@ def main():
     tools_called = result.get("tools_called", [])
     tools_str = ", ".join(f"`{t}`" for t in tools_called) if tools_called else "None"
 
-    # Evaluate verdict directly from agent's findings and telemetry
+    # Evaluate verdict based on Model Armor guardrail
     output_lower = output_content.lower()
-    is_blocked = (
+    ma_blocked = (
         result.get("status") in ["BLOCKED", "ATTACK_CONTAINED"] or
         any(phrase in output_lower for phrase in [
-            "prompt injection",
             "model armor",
+            "security_violation",
             "quarantined",
+            "blocked",
+            "dlp",
+            "prompt injection",
             "rejected",
-            "security concern",
             "security violation",
-            "do not merge",
-            "unauthorized",
-            "malicious",
-            "attack",
-        ]) or
-        "add_collaborator" in tools_called
+        ])
     )
 
-    status_icon = "🚨 REJECTED" if is_blocked else "✅ APPROVED"
+    if agent_mode == "unshielded":
+        status_icon = "⚠️ UNSHIELDED RUNTIME (NO MODEL ARMOR)"
+    elif ma_blocked:
+        status_icon = "🚨 BLOCKED BY MODEL ARMOR"
+    else:
+        status_icon = "✅ APPROVED"
+
     comment = (
-        f"## 🤖 Gemini AI PR Reviewer — {status_icon} ({agent_mode.capitalize()} Mode)\n\n"
-        f"- **Agent Mode:** `{agent_mode}`\n"
-        f"- **Reasoning Engine:** `{engine_id}`\n"
+        f"## 🤖 Gemini AI PR Reviewer — {status_icon}\n\n"
+        f"- **Agent Security Mode:** `{agent_mode.upper()}`\n"
+        f"- **Reasoning Engine ID:** `{engine_id}`\n"
         f"- **Tools Executed:** {tools_str}\n\n"
         f"### Agent Evaluation Report\n\n"
         f"{output_content}\n\n"
@@ -160,26 +163,34 @@ def main():
     if github_token:
         post_pr_comment(repo, pr_number, github_token, comment)
 
-    if is_blocked:
-        # Extract the specific reason directly from the agent's response
-        reasons = [
-            line.strip() for line in output_content.split("\n")
-            if any(term in line.lower() for term in ["injection", "model armor", "reject", "unauthorized", "security", "quarantined", "concern", "attack"])
-        ]
-        agent_reason = "\n   • ".join(reasons) if reasons else output_content
+    if agent_mode == "unshielded":
+        # Agent without Model Armor has no perimeter guardrails and should just complete
         print("\n" + "=" * 64)
-        print("❌ PR REVIEW GATE FAILED: Rejected by Reviewer Agent")
+        print("ℹ️  UNSHIELDED AGENT (NO MODEL ARMOR): Completed without guardrails.")
         print("=" * 64)
-        print(f"👉 Reason from Agent:\n   • {agent_reason}\n")
-        print("❌ Failing workflow check to block untrusted PR from merging.")
-        sys.exit(1)
-    else:
-        print("\n" + "=" * 64)
-        print("✅ PR REVIEW GATE PASSED: Approved by Reviewer Agent")
-        print("=" * 64)
-        print(f"👉 Agent Summary:\n   • {output_content}\n")
-        print("✅ PR approved for merge.")
+        print("✅ Workflow job completed normally.")
         sys.exit(0)
+    else:
+        # Agent with Model Armor: when Model Armor blocked the change, the workflow should fail
+        if ma_blocked:
+            reasons = [
+                line.strip() for line in output_content.split("\n")
+                if any(term in line.lower() for term in ["model armor", "blocked", "dlp", "security_violation", "quarantined", "injection", "rejected", "violation"])
+            ]
+            agent_reason = "\n   • ".join(reasons) if reasons else output_content
+            print("\n" + "=" * 64)
+            print("❌ WORKFLOW FAILED: Model Armor blocked the change")
+            print("=" * 64)
+            print(f"👉 Reason from Agent:\n   • {agent_reason}\n")
+            print("❌ Failing workflow check because Model Armor blocked the change.")
+            sys.exit(1)
+        else:
+            print("\n" + "=" * 64)
+            print("✅ WORKFLOW PASSED: PR approved by Model Armor shielded agent")
+            print("=" * 64)
+            print(f"👉 Agent Summary:\n   • {output_content}\n")
+            print("✅ PR approved for merge.")
+            sys.exit(0)
 
 
 if __name__ == "__main__":
