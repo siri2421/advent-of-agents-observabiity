@@ -157,20 +157,14 @@ def main():
     match_found = armor_scan["match_found"]
     print(f"🛡️  Model Armor Inspection State: {armor_scan['filter_state']}")
 
-    # 4. Invoke Reasoning Engine on Vertex AI
-    if match_found:
-        agent_prompt = (
-            f"Security Alert: Pull Request PR-{pr_number} diff was quarantined by Google Cloud Model Armor "
-            f"due to detected indirect prompt injection (PI_AND_JAILBREAK). "
-            f"Halt automated execution, summarize the threat, and verify no unauthorized tools like add_collaborator were called."
-        )
-    else:
-        agent_prompt = (
-            f"Review and triage pull request PR-{pr_number} with the following code diff:\n\n{pr_diff}\n\n"
-            f"Verify code quality, security posture, and summarize changes."
-        )
+    # 4. Standard clean prompt sent to Agent Engine (identical for both scenarios)
+    agent_prompt = f"Please review and process pull request {pr_number} for repository {repo}."
 
-    agent_review = invoke_reasoning_engine(project_id, location, engine_id, agent_prompt, gcp_token)
+    if match_found:
+        print("🚨 Attack detected in diff! Skipping agent review of untrusted payload.")
+        agent_review = "Automated review halted. Malicious indirect prompt injection was quarantined by Model Armor before model ingestion. Zero unauthorized tools were executed."
+    else:
+        agent_review = invoke_reasoning_engine(project_id, location, engine_id, agent_prompt, gcp_token)
 
     # 5. Formulate PR Comment & Merge Gate
     if match_found:
