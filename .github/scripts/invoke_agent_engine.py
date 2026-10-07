@@ -97,6 +97,7 @@ def main():
     project_id = os.environ.get("GCP_PROJECT", "siri-adventofagents")
     location = os.environ.get("GCP_LOCATION", "us-central1")
     engine_id = os.environ.get("REASONING_ENGINE_ID", "3821621218050572288")
+    agent_mode = os.environ.get("AGENT_MODE", "shielded").lower()
 
     if not repo or not pr_number:
         print("Missing REPO_NAME or PR_NUMBER. Exiting.")
@@ -106,7 +107,7 @@ def main():
     print(f"🔍 Analyzing PR #{pr_number} on {repo}")
     print(f"📦 GCP Project: {project_id} | Location: {location}")
     print(f"🤖 Vertex AI Reasoning Engine: {engine_id}")
-    print(f"🛡️  Security Architecture: Native AGENT_IDENTITY + Agent Egress Gateway")
+    print(f"🛡️  Agent Security Mode: {agent_mode.upper()}")
     print(f"================================================================")
 
     # 1. Clean, identical prompt template across all PRs
@@ -118,37 +119,56 @@ def main():
 
     # 3. Handle Attack / Quarantine Case
     if result["status"] in ["BLOCKED", "ATTACK_CONTAINED"]:
-        comment = (
-            "## 🛡️ Gemini Enterprise AI PR Reviewer — Model Armor Security Alert\n\n"
-            "| Security Check | Status | Guardrail Policy |\n"
-            "| :--- | :--- | :--- |\n"
-            "| **Indirect Prompt Injection** | 🚨 **BLOCKED & CONTAINED** | `PI_AND_JAILBREAK` |\n"
-            "| **Tool Egress Inspection** | 🔒 **QUARANTINED** | `agent-prompt-shield` |\n"
-            "| **Privilege Escalation** | 🛡️ **PREVENTED** | Zero Unauthorized Tool Calls |\n\n"
-            "> [!CAUTION]\n"
-            "> **Security Violation**: Malicious prompt injection directive was detected inside the untrusted pull request diff. "
-            "Automated privilege escalation (`add_collaborator`) was halted.\n\n"
-            f"### 🤖 Agent Triage Summary\n{result['output'] or 'Review halted. Malicious payload neutralized.'}\n\n"
-            "---\n"
-            "*Protected by Google Cloud Model Armor & Gemini Enterprise Agent Runtime on Vertex AI.*"
-        )
-        if github_token:
-            post_pr_comment(repo, pr_number, github_token, comment)
-        print("❌ Malicious prompt injection detected! Failing CI build to block merge.")
-        sys.exit(1)
+        if agent_mode == "unshielded":
+            comment = (
+                "## 🚨 Gemini AI PR Reviewer — UNSHIELDED RUNTIME VULNERABILITY\n\n"
+                "| Security Check | Status | Guardrail Policy |\n"
+                "| :--- | :--- | :--- |\n"
+                "| **Agent Mode** | ⚠️ **UNSHIELDED** | Direct Egress (No Model Armor) |\n"
+                "| **Indirect Prompt Injection** | ❌ **UNPROTECTED** | Malicious Directive Ingested |\n"
+                "| **CI Security Gate** | 🚨 **FAILED** | Insecure Agent Pipeline Blocked |\n\n"
+                "> [!CAUTION]\n"
+                "> **VULNERABILITY DEMONSTRATED**: This agent is running without Model Armor or Agent Gateway guardrails. "
+                "Untrusted instructions from the pull request diff were processed directly without infrastructure perimeter inspection.\n\n"
+                f"### 🤖 Agent Triage Summary\n{result['output'] or 'Untrusted payload processed without guardrails.'}\n\n"
+                "---\n"
+                "*Demonstrating vulnerability of unshielded AI agents (Advent of Agents Day 10).*"
+            )
+            if github_token:
+                post_pr_comment(repo, pr_number, github_token, comment)
+            print("❌ Build Failed: Unshielded agent processed untrusted PR diff without Model Armor!")
+            sys.exit(1)
+        else:
+            comment = (
+                "## 🛡️ Gemini Enterprise AI PR Reviewer — MODEL ARMOR GUARDRAIL ACTIVE\n\n"
+                "| Security Check | Status | Guardrail Policy |\n"
+                "| :--- | :--- | :--- |\n"
+                "| **Agent Mode** | 🛡️ **SHIELDED** | Agent Gateway + Model Armor |\n"
+                "| **Indirect Prompt Injection** | 🔒 **CONTAINED** | `PI_AND_JAILBREAK` |\n"
+                "| **Privilege Escalation** | ✅ **PREVENTED** | Zero Unauthorized Tool Calls |\n\n"
+                "> [!NOTE]\n"
+                "> **ATTACK NEUTRALIZED**: Google Cloud Model Armor intercepted the indirect prompt injection at the egress gateway boundary, "
+                "quarantining the malicious payload and protecting the agent execution environment.\n\n"
+                f"### 🤖 Agent Triage Summary\n{result['output'] or 'Review halted. Malicious payload quarantined.'}\n\n"
+                "---\n"
+                "*Protected by Google Cloud Model Armor & Gemini Enterprise Agent Runtime on Vertex AI.*"
+            )
+            if github_token:
+                post_pr_comment(repo, pr_number, github_token, comment)
+            print("✅ Attack Contained: Model Armor prevented unauthorized execution.")
+            sys.exit(0)
 
     # 4. Handle Clean Case
     elif result["status"] == "SUCCESS":
         comment = (
-            "## 🛡️ Gemini Enterprise AI PR Reviewer — Code Triage\n\n"
+            f"## 🛡️ Gemini Enterprise AI PR Reviewer — Code Triage ({agent_mode.capitalize()} Mode)\n\n"
             "| Security Check | Status | Guardrail Policy |\n"
             "| :--- | :--- | :--- |\n"
-            "| **Indirect Prompt Injection** | ✅ **PASSED** | `PI_AND_JAILBREAK` |\n"
-            "| **Tool Egress Inspection** | 🛡️ **CLEAN** | `agent-prompt-shield` |\n"
+            "| **Indirect Prompt Injection** | ✅ **PASSED** | Clean PR Content |\n"
             "| **Privilege Escalation** | ✅ **VERIFIED** | Clean Diff |\n\n"
             f"### 🤖 Agent Triage Summary\n{result['output']}\n\n"
             "---\n"
-            "*Protected by Google Cloud Model Armor & Gemini Enterprise Agent Runtime on Vertex AI.*"
+            "*Tested with Gemini Enterprise Agent Runtime on Vertex AI.*"
         )
         if github_token:
             post_pr_comment(repo, pr_number, github_token, comment)

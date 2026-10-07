@@ -68,16 +68,45 @@ _agent_engines_utils._upload_extra_packages = _patched_upload_extra_packages
 
 
 def main():
+    unshielded = "--unshielded" in sys.argv
+    force = "--force" in sys.argv
+
+    display_name = "pr-reviewer-unshielded" if unshielded else DISPLAY_NAME
+    description = (
+        "PR Reviewer Agent without Model Armor or Agent Gateway guardrails"
+        if unshielded
+        else "PR Reviewer Agent with native AGENT_IDENTITY and Model Armor Agent Gateway"
+    )
+
     print("============================================================")
-    print("🚀 DEPLOYING PR REVIEWER AGENT WITH NATIVE AGENT_IDENTITY 🚀")
+    print(f"🚀 DEPLOYING {'UNSHIELDED' if unshielded else 'SHIELDED'} PR REVIEWER AGENT 🚀")
     print("============================================================")
     print(f"👉 Project: {PROJECT_ID}")
     print(f"👉 Location: {LOCATION}")
     print(f"👉 Staging: {STAGING_BUCKET}")
-    print(f"👉 Display Name: {DISPLAY_NAME}")
+    print(f"👉 Display Name: {display_name}")
     print("────────────────────────────────────────────────────────────")
 
     client = Client(project=PROJECT_ID, location=LOCATION, credentials=creds)
+
+    # Fast-Path Engine Re-Use Shield (Rule 2)
+    if not force:
+        try:
+            url = f"https://{LOCATION}-aiplatform.googleapis.com/v1beta1/projects/{PROJECT_ID}/locations/{LOCATION}/reasoningEngines"
+            resp = requests.get(url, headers={"Authorization": f"Bearer {token}"})
+            for engine in resp.json().get("reasoningEngines", []):
+                if engine.get("displayName") == display_name:
+                    engine_urn = engine.get("name")
+                    engine_id = engine_urn.split("/")[-1]
+                    print(f"🚀 Bypassing slow re-creation and reusing existing engine runtime instantaneously!")
+                    print(f"👉 Engine URN: {engine_urn}")
+                    print(f"👉 Engine ID: {engine_id}")
+                    id_file = f"/tmp/{display_name}_id.txt"
+                    with open(id_file, "w") as f:
+                        f.write(engine_id)
+                    return engine_id
+        except Exception as e:
+            print(f"⚠️ Check for existing engine encountered: {e}")
 
     app = reasoning_engines.AdkApp(agent=pr_reviewer_agent, enable_tracing=True)
 
@@ -85,13 +114,14 @@ def main():
         "GOOGLE_GENAI_USE_VERTEXAI": "TRUE",
         "TARGET_PROJECT_ID": PROJECT_ID,
         "GOOGLE_CLOUD_LOCATION": "global",
-        "MODEL_ARMOR_LOCATION": "us-central1",
-        "MODEL_ARMOR_TEMPLATE_ID": "agent-prompt-shield",
         "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY": "true",
-        "OTEL_SERVICE_NAME": DISPLAY_NAME,
+        "OTEL_SERVICE_NAME": display_name,
         "OTEL_SEMCONV_STABILITY_OPT_IN": "gen_ai_latest_experimental",
         "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT": "EVENT_ONLY",
     }
+    if not unshielded:
+        runtime_env["MODEL_ARMOR_LOCATION"] = "us-central1"
+        runtime_env["MODEL_ARMOR_TEMPLATE_ID"] = "agent-prompt-shield"
 
     requirements = [
         "google-cloud-aiplatform[reasoningengine,adk]>=1.75.0",
@@ -103,19 +133,23 @@ def main():
 
     agent_source_file = os.path.join(DAY10_DIR, "pr_reviewer_agent.py")
 
+    gateway_config = None
+    if not unshielded:
+        gateway_config = {
+            "agent_to_anywhere_config": {
+                "agent_gateway": f"projects/{PROJECT_ID}/locations/{LOCATION}/agentGateways/agent-egress-gateway"
+            }
+        }
+
     config = types.AgentEngineConfig(
-        display_name=DISPLAY_NAME,
-        description="PR Reviewer Agent with native AGENT_IDENTITY and Model Armor Agent Gateway",
+        display_name=display_name,
+        description=description,
         identity_type="AGENT_IDENTITY",
         staging_bucket=STAGING_BUCKET,
         requirements=requirements,
         extra_packages=[agent_source_file],
         env_vars=runtime_env,
-        agent_gateway_config={
-            "agent_to_anywhere_config": {
-                "agent_gateway": f"projects/{PROJECT_ID}/locations/{LOCATION}/agentGateways/agent-egress-gateway"
-            }
-        }
+        agent_gateway_config=gateway_config,
     )
 
     print("⏳ Calling client.agent_engines.create(agent=app, config=config)...")
@@ -125,14 +159,21 @@ def main():
         engine_id = engine_urn.split("/")[-1]
         effective_identity = getattr(remote_agent.api_resource.spec, "effective_identity", None)
         print(f"\n============================================================")
-        print(f"🎉 SUCCESS! Agent Deployed with AGENT_IDENTITY & Gateway!")
+        print(f"🎉 SUCCESS! Agent Deployed ({display_name})!")
         print(f"============================================================")
         print(f"👉 Engine URN: {engine_urn}")
         print(f"👉 Engine ID: {engine_id}")
         print(f"👉 Effective Identity: {effective_identity}")
-        print(f"👉 Egress Gateway: agent-egress-gateway")
+        if not unshielded:
+            print(f"👉 Egress Gateway: agent-egress-gateway")
         print("────────────────────────────────────────────────────────────")
+        with open(f"/tmp/{display_name}_id.txt", "w") as f:
+            f.write(engine_id)
+        return engine_id
     except Exception as e:
+        if unshielded:
+            print(f"❌ Failed to create unshielded engine: {e}")
+            raise e
         print(f"❌ Direct creation with agent_gateway_config failed: {e}")
         print("🔄 Retrying with two-step provisioning (create with AGENT_IDENTITY, then PATCH agent_gateway_config)...")
         config.agent_gateway_config = None
@@ -164,6 +205,9 @@ def main():
             json=patch_payload
         )
         print(f"👉 Patch response ({patch_resp.status_code}): {patch_resp.text}")
+        with open(f"/tmp/{display_name}_id.txt", "w") as f:
+            f.write(engine_id)
+        return engine_id
 
 
 if __name__ == "__main__":

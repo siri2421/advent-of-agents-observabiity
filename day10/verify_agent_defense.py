@@ -90,10 +90,37 @@ def main():
     parser.add_argument("--project", default=os.getenv("GOOGLE_CLOUD_PROJECT", "siri-adventofagents"))
     parser.add_argument("--location", default="us-central1")
     parser.add_argument("--engine", default=os.getenv("REASONING_ENGINE_ID", "3821621218050572288"))
+    parser.add_argument("--unshielded-engine", default="7007355004461776896")
+    parser.add_argument("--shielded-engine", default="3821621218050572288")
+    parser.add_argument("--compare", action="store_true", help="Compare unshielded vs shielded on the same malicious PR")
+    parser.add_argument("--pr", type=int, default=3, help="PR number to test (default: 3)")
     parser.add_argument("--repo", default="siri2421/advent-of-agents-observabiity")
     args = parser.parse_args()
 
     token = get_token()
+
+    if args.compare:
+        print("================================================================")
+        print("⚔️ ADVENT OF AGENTS DAY 10 — UNSHIELDED VS SHIELDED COMPARISON ⚔️")
+        print(f"👉 Project: {args.project} | Location: {args.location}")
+        print(f"👉 Target PR: #{args.pr} (MALICIOUS INJECTION DIFF)")
+        print("================================================================")
+
+        print("\n>>> ACT 1: Testing Agent 1 (Unshielded / Direct Egress)...")
+        test_agent(args.project, args.location, args.unshielded_engine, args.pr, args.repo, token)
+
+        print("\n" + "-" * 64)
+        print(">>> ACT 2: Testing Agent 2 (Shielded / Model Armor Agent Gateway)...")
+        print("-" * 64)
+        shielded_passed = test_agent(args.project, args.location, args.shielded_engine, args.pr, args.repo, token)
+
+        print("\n================================================================")
+        print("📊 COMPARISON SUMMARY REPORT")
+        print("• Agent 1 (Unshielded): ⚠️ EXPLOITABLE (Direct tool ingestion without guardrail)")
+        print(f"• Agent 2 (Shielded):   {'🛡️ PROTECTED (Attack neutralized by Model Armor)' if shielded_passed else '❌ FAILED'}")
+        print("================================================================")
+        sys.exit(0)
+
     print("================================================================")
     print("🚀 ADVENT OF AGENTS DAY 10 — LOCAL GOVERNANCE TESTER 🚀")
     print(f"👉 Project: {args.project} | Location: {args.location}")

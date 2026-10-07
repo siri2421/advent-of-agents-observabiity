@@ -1,8 +1,23 @@
-name: Gemini AI PR Reviewer (Model Armor Protected)
+name: Gemini AI PR Reviewer Security Analysis
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      agent_mode:
+        description: 'Agent to run (both, unshielded, or shielded)'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - unshielded
+          - shielded
+      pr_number:
+        description: 'PR number to test'
+        required: false
+        default: '3'
 
 permissions:
   id-token: write
@@ -11,9 +26,25 @@ permissions:
   issues: write
 
 jobs:
-  ai-triage:
-    name: AI Security & Code Triage
+  triage:
+    name: ${{ matrix.agent.name }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        agent:
+          - name: "Agent 1: Unshielded (No Guardrail)"
+            mode: "unshielded"
+            engine_id: "7007355004461776896"
+          - name: "Agent 2: Shielded (Model Armor Gateway)"
+            mode: "shielded"
+            engine_id: "3821621218050572288"
+    if: >
+      (github.event_name == 'pull_request' &&
+       (!contains(github.event.pull_request.labels.*.name, 'shielded-only') || matrix.agent.mode == 'shielded') &&
+       (!contains(github.event.pull_request.labels.*.name, 'unshielded-only') || matrix.agent.mode == 'unshielded')) ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.agent_mode == 'both' || github.event.inputs.agent_mode == matrix.agent.mode))
 
     steps:
       - name: Checkout Code
@@ -35,15 +66,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install google-auth requests
 
-      - name: Invoke Gemini Enterprise Agent Engine
+      - name: Invoke ${{ matrix.agent.name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
           REPO_NAME: ${{ github.repository }}
           GCP_PROJECT: "siri-adventofagents"
           GCP_LOCATION: "us-central1"
-          # Deployed Engine Target:
-          # • 3821621218050572288 = Native AGENT_IDENTITY + Agent Gateway + Model Armor
-          REASONING_ENGINE_ID: "3821621218050572288"
+          REASONING_ENGINE_ID: ${{ matrix.agent.engine_id }}
+          AGENT_MODE: ${{ matrix.agent.mode }}
         run: |
           python .github/scripts/invoke_agent_engine.py
