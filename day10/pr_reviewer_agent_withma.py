@@ -80,7 +80,7 @@ def sanitize_with_model_armor(content: str) -> Dict[str, Any]:
 # ------------------------------------------------------------------------------
 # ADK Callbacks (In-Code Guardrail Plumbing)
 # ------------------------------------------------------------------------------
-def before_tool_guardrail(tool, args: Dict[str, Any], context) -> Optional[Dict[str, Any]]:
+def before_tool_guardrail(tool, args: Dict[str, Any], tool_context=None, **kwargs) -> Optional[Dict[str, Any]]:
     """Inspects tool invocation before execution (e.g. catches privilege escalation arguments)."""
     tool_name = getattr(tool, "name", str(tool))
     print(f"\n[IN-CODE GUARDRAIL: before_tool_callback] Checking tool '{tool_name}' with args {args}...")
@@ -97,7 +97,7 @@ def before_tool_guardrail(tool, args: Dict[str, Any], context) -> Optional[Dict[
     return None  # Returning None allows tool execution to proceed
 
 
-def after_tool_guardrail(tool, args: Dict[str, Any], context, response: Any) -> Optional[Dict[str, Any]]:
+def after_tool_guardrail(tool, args: Dict[str, Any], tool_context=None, response: Any = None, **kwargs) -> Optional[Dict[str, Any]]:
     """Inspects untrusted external data (PR diffs) after tool fetch, BEFORE reaching the LLM."""
     tool_name = getattr(tool, "name", str(tool))
     print(f"\n[IN-CODE GUARDRAIL: after_tool_callback] Scanning output from '{tool_name}' via Model Armor...")
