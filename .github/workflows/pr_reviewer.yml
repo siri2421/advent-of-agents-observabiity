@@ -43,7 +43,7 @@ jobs:
           GCP_PROJECT: "siri-adventofagents"
           GCP_LOCATION: "us-central1"
           # Deployed Engine Target:
-          # • 3895649136925474816 = Native AGENT_IDENTITY + Agent Gateway + Model Armor
-          REASONING_ENGINE_ID: "3895649136925474816"
+          # • 3821621218050572288 = Native AGENT_IDENTITY + Agent Gateway + Model Armor
+          REASONING_ENGINE_ID: "3821621218050572288"
         run: |
           python .github/scripts/invoke_agent_engine.py
